@@ -5,8 +5,10 @@ const conn = require('./connection');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const User = require('./models/user');
+const jwt = require('jsonwebtoken');
+const trans = require('./models/transactions');
 
-// Body-parser middleware
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -14,6 +16,20 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+function auth(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) return res.status(401).send('Access Denied: No Token Provided!');
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch (error) {
+        res.status(400).send('Invalid Token');
+    }
+}
 
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
@@ -26,7 +42,22 @@ app.post('/login', async (req, res) => {
         if (user.password != password) {
             return res.status(400).json({ message: "Invalid credentials" });
         }
-        res.status(200).json({ message: "Login successful", userId: user._id });
+        const payload = {
+            user: {
+                id: user._id.toString()
+            }
+        };
+        jwt.sign(
+            payload,
+            process.env.JWT_SECRET,
+            (err, token) => {
+                if (err) throw err;
+                res.json({
+                    message: "Login successful",
+                    token
+                });
+            }
+        );
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: "Server error" });
@@ -50,5 +81,17 @@ app.post('/register', async (req, res) => {
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server error');
+    }
+});
+
+
+app.get('/user-details',auth, async(req, res) => {
+    try {
+        const user = await User.findById(req.user.userId);
+        if (!user) return res.status(404).send('User not found');
+        res.json({ name: user.name, email: user.email });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Internal Server Error" });
     }
 });
