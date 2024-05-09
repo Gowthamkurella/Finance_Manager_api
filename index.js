@@ -89,7 +89,7 @@ app.get('/user-details',auth, async(req, res) => {
     try {
         const user = await User.findById(req.user.userId);
         if (!user) return res.status(404).send('User not found');
-        res.json({ name: user.name, email: user.email });
+        res.json({ name: user.username, email: user.email });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: "Internal Server Error" });
